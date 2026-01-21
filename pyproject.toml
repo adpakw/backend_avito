@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "backend-avito"
+version = "0.1.0"
+description = ""
+authors = ["adpakw"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+fastapi = {extras = ["standard"], version = "^0.128.0"}
+uvicorn = "^0.40.0"
+pytest = "^9.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

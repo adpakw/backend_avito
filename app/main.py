@@ -1,9 +1,21 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
-from fastapi import FastAPI, status
+from fastapi import APIRouter, Depends, FastAPI, status
 
-from app.pydantic_models import Advertisement, PredictionResult
+from app.model import get_model, model_client
+from app.pydantic_models import Advertisement
+from app.routes import predict
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    model_client.initialize_model()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+router = APIRouter()
 
 
 @app.get("/", status_code=status.HTTP_200_OK)
@@ -11,15 +23,17 @@ async def root():
     return {"message": "Hello world!"}
 
 
-@app.post("/predict", response_model=PredictionResult, status_code=status.HTTP_200_OK)
-async def predict(ad: Advertisement) -> PredictionResult:
-    if ad.is_verified_seller:
-        return PredictionResult(result=True)
-    elif ad.images_qty > 0:
-        return PredictionResult(result=True)
-    else:
-        return PredictionResult(result=False)
+@router.get("/health")
+def health(model=Depends(get_model)):
+    return {"status": "healthy", "model_loaded": model is not None}
 
+
+app.include_router(router)
+app.include_router(predict.router)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+    )

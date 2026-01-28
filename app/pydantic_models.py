@@ -11,5 +11,6 @@ class Advertisement(BaseModel):
     images_qty: int
 
 
-class PredictionResult(BaseModel):
-    result: bool
+class PredictResponse(BaseModel):
+    is_violation: int
+    probability: float

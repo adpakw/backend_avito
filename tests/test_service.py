@@ -1,19 +1,32 @@
+from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.model import model_client
 
-client = TestClient(app)
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_model():
+    model_client.initialize_model()
+    yield
 
 
-class TestPositivePredictions:
-    def test_verified_seller_with_images(self):
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+class TestPredictions:
+    def test_positive_prediction(self, client):
         ad_data = {
             "seller_id": 0,
-            "is_verified_seller": True,
+            "is_verified_seller": 0,
             "item_id": 123,
             "name": "Product 1",
             "description": "bla bla bla",
-            "category": 0,
+            "category": 100,
             "images_qty": 1,
         }
 
@@ -21,81 +34,32 @@ class TestPositivePredictions:
         data = response.json()
 
         assert response.status_code == 200
-        assert data["result"] is True
+        assert data["is_violation"] == 1
+        assert data["probability"] > 0.62836
+        assert data["probability"] < 0.62837
 
-    def test_verified_seller_no_images(self):
+    def test_negative_prediction(self, client):
         ad_data = {
-            "seller_id": 1,
+            "seller_id": 0,
             "is_verified_seller": True,
-            "item_id": 1234,
-            "name": "Product 2",
-            "description": "blaaaaaa",
-            "category": 1,
-            "images_qty": 0,
+            "item_id": 123,
+            "name": "Product 1",
+            "description": "bla bla bla",
+            "category": 100,
+            "images_qty": 10,
         }
 
         response = client.post("/predict", json=ad_data)
         data = response.json()
 
         assert response.status_code == 200
-        assert data["result"] is True
-
-    def test_unverified_seller_with_images(self):
-        ad_data = {
-            "seller_id": 2,
-            "is_verified_seller": False,
-            "item_id": 12345,
-            "name": "Product 3",
-            "description": "bbbbbbb",
-            "category": 2,
-            "images_qty": 5,
-        }
-
-        response = client.post("/predict", json=ad_data)
-        data = response.json()
-
-        assert response.status_code == 200
-        assert data["result"] is True
-
-
-class TestNegativePredictions:
-    def test_unverified_seller_no_images(self):
-        ad_data = {
-            "seller_id": 3,
-            "is_verified_seller": False,
-            "item_id": 123456,
-            "name": "Product 4",
-            "description": "poiuytrewq",
-            "category": 3,
-            "images_qty": 0,
-        }
-
-        response = client.post("/predict", json=ad_data)
-        data = response.json()
-
-        assert response.status_code == 200
-        assert data["result"] is False
-
-    def test_unverified_seller_zero_images(self):
-        ad_data = {
-            "seller_id": 4,
-            "is_verified_seller": False,
-            "item_id": 1234567,
-            "name": "Product 5",
-            "description": "zxcvbnm",
-            "category": 4,
-            "images_qty": 0,
-        }
-
-        response = client.post("/predict", json=ad_data)
-        data = response.json()
-
-        assert response.status_code == 200
-        assert data["result"] is False
+        assert data["is_violation"] == 0
+        assert data["probability"] > 4.03325e-05
+        assert data["probability"] < 4.03326e-05
 
 
 class TestValidation:
-    def test_missing_required_field(self):
+    def test_missing_required_field(self, client):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -113,7 +77,7 @@ class TestValidation:
             response = client.post("/predict", json=ad_data_tmp)
             assert response.status_code == 422
 
-    def test_wrong_type_for_int_fields(self):
+    def test_wrong_type_for_int_fields(self, client):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -142,7 +106,7 @@ class TestValidation:
                 response = client.post("/predict", json=ad_data_tmp)
                 assert response.status_code == 422
 
-    def test_wrong_type_for_str_fields(self):
+    def test_wrong_type_for_str_fields(self, client):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -171,7 +135,7 @@ class TestValidation:
                 response = client.post("/predict", json=ad_data_tmp)
                 assert response.status_code == 422
 
-    def test_wrong_type_for_bool_fields(self):
+    def test_wrong_type_for_bool_fields(self, client):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -198,3 +162,24 @@ class TestValidation:
 
             response = client.post("/predict", json=ad_data_tmp)
             assert response.status_code == 422
+
+
+class TestUnavalibleModel:
+    def test_unavailible_model(self):
+        with patch("app.model.model_client._model", None):
+            with patch("app.model.model_client.initialize_model", None):
+                client = TestClient(app)
+
+                ad_data = {
+                    "seller_id": 0,
+                    "is_verified_seller": True,
+                    "item_id": 123,
+                    "name": "Product 1",
+                    "description": "bla bla bla",
+                    "category": 100,
+                    "images_qty": 10,
+                }
+
+                response = client.post("/predict", json=ad_data)
+
+                assert response.status_code == 503

@@ -3,8 +3,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, status
 
-from app.model import get_model, model_client
-from app.pydantic_models import Advertisement
+from app.repositories.model import get_model, model_client
 from app.routes import predict
 
 

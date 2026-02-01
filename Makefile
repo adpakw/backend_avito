@@ -5,3 +5,7 @@ run:
 .PHONY: test
 test:
 	pytest -v
+
+.PHONY: migration
+migration:
+	bash scripts/migrate.sh

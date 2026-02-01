@@ -9,3 +9,4 @@ __pycache__
 datasets
 .pytest_cache
 *.pkl
+.env

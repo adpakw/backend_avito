@@ -5,30 +5,37 @@
 
 Файл ```pyproject.toml``` заменяет ```requirements.txt``` и содержит все настройки проекта.
 
-## БД
-Чтобы поднять PostgreSQL
+## Переменные окружения
+В проекте используются переменные окружения, чтобы использовать их полноценно скопируйте содержимое `.env.example` в `.env`
+
+## Инфра
+Поднимаем инфру в докер контейнерах через docker-compose
 ```bash
 docker-compose up -d
 ```
 
+## БД
+**PostgreSQL** поднимается через docker-compose
+
 Для того чтобы залезть в контейнер и проверить БД
 ```bash
-docker exec -it CONTAINER_NAME bash
+docker exec -it backend_avito_postgres bash
 
-psql -U postgres -d POSTGRES_DB -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+psql -U postgres -d backend_avito -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
 ```
 
-## Миграции
+### Миграции
 Для миграций используется [goose](https://github.com/pressly/goose) 
 ```bash
-# Создание миграции 
-goose -dir migrations create {migration_name} sql
-
-# Затем пишем в созданном файле логику миграции
-
 # Запуск миграции
 make migration
 ```
+
+## Брокер сообщений
+В качестве брокера используется **Redpanda** (**Kafka**-совместимый брокер), поднимается через docker-compose. 
+- Брокер будет доступен на `localhost:9092`
+- Веб-консоль для просмотра топиков и сообщений — на http://localhost:8080
+
 
 ## Запуск проекта
 ```bash

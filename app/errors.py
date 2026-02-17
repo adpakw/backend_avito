@@ -20,3 +20,8 @@ class AdvertisementNotFoundError(Exception):
     """Ошибка указывает на то, что объявление в бд не найден"""
 
     pass
+
+class ModerationTaskNotFoundError(Exception):
+    """Ошибка указывает на то, что задача на обработку в бд не найдена"""
+
+    pass

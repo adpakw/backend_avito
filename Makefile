@@ -9,3 +9,7 @@ test:
 .PHONY: migration
 migration:
 	bash scripts/migrate.sh
+
+.PHONY: worker
+worker:
+	python -m app.workers.moderation_worker

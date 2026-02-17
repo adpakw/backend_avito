@@ -8,6 +8,8 @@ from app.models.advertisement import AdvertisementID, AdvertisementWithSeller
 from app.models.response_predict import PredictResponse
 from app.repositories.model import get_model
 from app.services.ml_service import MLService, get_ml_service
+from app.services.moderation_service import ModerationService, get_moder_service
+from app.models.moderation import ModerationMessage
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,7 +42,7 @@ async def predict_endpoint(
 
 
 @router.post("/simple_predict", response_model=PredictResponse)
-async def predict_endpoint(
+async def simple_predict_endpoint(
     ad: AdvertisementID, ml_service_client: MLService = Depends(get_ml_service)
 ):
     try:
@@ -57,3 +59,27 @@ async def predict_endpoint(
         )
 
     return PredictResponse(**prediction)
+
+
+@router.post("/async_predict", response_model=ModerationMessage)
+async def async_predict_endpoint(
+    ad: AdvertisementID, moder_service_client: ModerationService = Depends(get_moder_service)
+):
+    try:
+        task_id = await moder_service_client.async_predict(ad.id)
+    except ModelIsNotAvailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model is not available.",
+        )
+    except ErrorInPrediction:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error in prediction.",
+        )
+
+    return ModerationMessage(
+        task_id=task_id, status="pending", message="Moderation request accepted"
+    )
+
+

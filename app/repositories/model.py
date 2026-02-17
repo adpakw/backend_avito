@@ -68,7 +68,7 @@ class ModelSingleton:
             proba = self._model.predict_proba(features)[0]
             prediction = self._model.predict(features)[0]
             return bool(prediction), float(proba[1])
-        except AttributeError as e:
+        except (AttributeError, TypeError) as e:
             raise ModelIsNotAvailable("Model is not available in ModelSingleton.")
 
 

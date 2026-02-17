@@ -4,8 +4,11 @@ from typing import Any, Dict
 
 import numpy as np
 
-from app.errors import (AdvertisementNotFoundError, ErrorInPrediction,
-                        ModelIsNotAvailable)
+from app.errors import (
+    AdvertisementNotFoundError,
+    ErrorInPrediction,
+    ModelIsNotAvailable,
+)
 from app.models.advertisement import AdvertisementWithSeller
 from app.repositories.advertisements import AdvertisementRepository
 from app.repositories.model import model_client
@@ -94,24 +97,12 @@ class MLService:
 
             ad_data = await ad_repo.get(item_id)
 
-            features = self._prepare_features(ad_data)
-
-            is_violation, probability = self.model_client.predict(features)
-
-            logger.info(
-                "Result of simple predict: {item_id=%s} - "
-                "is_violation=%s, probability=%.4f",
-                ad_data.item_id,
-                is_violation,
-                probability,
-            )
-
-            return {"is_violation": is_violation, "probability": probability}
+            return self.predict(ad_data)
 
         except ModelIsNotAvailable as e:
             raise ModelIsNotAvailable("Model is not available in MLService.")
         except AdvertisementNotFoundError as e:
-            raise ErrorInPrediction("Error in prediction in MLService.")
+            raise ErrorInPrediction("Advertisement Not Found In DB.")
         except Exception as e:
             raise ErrorInPrediction("Error in prediction in MLService.")
 

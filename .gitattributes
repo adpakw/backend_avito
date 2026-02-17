@@ -1,1 +1,1 @@
-artifacts filter=lfs diff=lfs merge=lfs -text
+artifacts/Запись[[:space:]]экрана[[:space:]]2026-02-18[[:space:]]в[[:space:]]00.23.08.mov filter=lfs diff=lfs merge=lfs -text

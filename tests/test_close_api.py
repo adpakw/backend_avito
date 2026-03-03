@@ -50,7 +50,6 @@ class TestCloseAPI:
         with patch.object(
             close_service_client, "close_advertisement", new_callable=AsyncMock
         ) as mock_close:
-            # Настраиваем мок на выброс исключения
             mock_close.side_effect = AdvertisementNotFoundError()
 
             request_data = {"id": 99999}

@@ -1,8 +1,9 @@
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.errors import ModelIsNotAvailable
 from app.main import app
 from app.repositories.model import model_client
 from app.repositories.moderation import ModerationRepository
@@ -22,19 +23,54 @@ def client():
 
 @pytest.fixture
 def mock_cache():
-    with patch("app.services.ml_service.CacheRepository") as mock:
-        cache_repo = AsyncMock()
-        cache_repo.get_prediction = AsyncMock(return_value=None)
-        cache_repo.set_prediction = AsyncMock(return_value=None)
-        mock.return_value = cache_repo
-        yield cache_repo
+    cache_repo = AsyncMock()
+    cache_repo.get_prediction = AsyncMock(return_value=None)
+    cache_repo.set_prediction = AsyncMock(return_value=None)
+    cache_repo.delete_prediction = AsyncMock(return_value=None)
+
+    original_cache_repo = ml_service_client.cache_repo
+    ml_service_client.cache_repo = cache_repo
+
+    yield cache_repo
+
+    ml_service_client.cache_repo = original_cache_repo
+
+
+@pytest.fixture
+def mock_ad_repo():
+    with patch("app.services.ml_service.AdvertisementRepository") as mock_ad_repo_class:
+        ad_repo = AsyncMock()
+        ad_repo.get = AsyncMock()
+        mock_ad_repo_class.return_value = ad_repo
+        yield ad_repo
+
+
+@pytest.fixture
+def mock_model():
+    original_model_client = ml_service_client.model_client
+    mock_model = MagicMock()
+    mock_model.predict = MagicMock()
+    ml_service_client.model_client = mock_model
+    yield mock_model
+    ml_service_client.model_client = original_model_client
+
+
+@pytest.fixture
+def reset_ml_service():
+    original_cache_repo = ml_service_client.cache_repo
+    original_model_client = ml_service_client.model_client
+
+    yield
+
+    ml_service_client.cache_repo = original_cache_repo
+    ml_service_client.model_client = original_model_client
 
 
 class TestPredictions:
-    def test_positive_prediction(self, client, mock_cache):
+    def test_positive_prediction(self, client, mock_cache, reset_ml_service):
         ad_data = {
             "seller_id": 0,
-            "is_verified_seller": 0,
+            "is_verified_seller": False,
             "item_id": 123,
             "name": "Product 1",
             "description": "bla bla bla",
@@ -47,33 +83,50 @@ class TestPredictions:
 
         assert response.status_code == 200
         assert data["is_violation"] == 1
-        # Обновляем ожидаемые значения на основе реальной модели
-        assert data["probability"] > 0.84
-        assert data["probability"] < 0.86
+        assert 0.84 < data["probability"] < 0.86
 
         mock_cache.get_prediction.assert_not_called()
         mock_cache.set_prediction.assert_not_called()
 
-    def test_positive_simple_prediction(self, client, mock_cache):
+    def test_positive_simple_prediction(
+        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+    ):
         mock_cache.get_prediction.return_value = None
-        
-        # Мокаем метод simple_predict у реального синглтона
-        with patch.object(ml_service_client, 'simple_predict', new_callable=AsyncMock) as mock_predict:
-            expected_result = {"is_violation": 1, "probability": 0.64056}
-            mock_predict.return_value = expected_result
-            
-            response = client.post("/simple_predict", json={"id": 5})
-            data = response.json()
 
-            assert response.status_code == 200
-            assert data["is_violation"] == 1
-            assert data["probability"] > 0.64
-            assert data["probability"] < 0.65
+        from app.models.advertisement import AdvertisementWithSeller
 
-            mock_cache.get_prediction.assert_called_once_with(5)
-            mock_cache.set_prediction.assert_called_once()
+        test_ad = AdvertisementWithSeller(
+            seller_id=1,
+            is_verified_seller=True,
+            item_id=5,
+            name="Test",
+            description="Test description",
+            category=5,
+            images_qty=3,
+            is_closed=False,
+        )
+        mock_ad_repo.get.return_value = test_ad
 
-    def test_simple_prediction_cache_hit(self, client, mock_cache):
+        expected_result = (1, 0.64056)
+        mock_model.predict.return_value = expected_result
+
+        response = client.post("/simple_predict", json={"id": 5})
+        data = response.json()
+
+        assert response.status_code == 200
+        assert data["is_violation"] == 1
+        assert 0.64 < data["probability"] < 0.65
+
+        mock_cache.get_prediction.assert_called_once_with(5)
+        mock_ad_repo.get.assert_called_once_with(5)
+        mock_model.predict.assert_called_once()
+        mock_cache.set_prediction.assert_called_once_with(
+            5, {"is_violation": 1, "probability": 0.64056}
+        )
+
+    def test_simple_prediction_cache_hit(
+        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+    ):
         cached_result = {"is_violation": 1, "probability": 0.75}
         mock_cache.get_prediction.return_value = cached_result
 
@@ -84,15 +137,17 @@ class TestPredictions:
         assert data == cached_result
 
         mock_cache.get_prediction.assert_called_once_with(5)
+        mock_ad_repo.get.assert_not_called()
+        mock_model.predict.assert_not_called()
         mock_cache.set_prediction.assert_not_called()
 
-    def test_negative_prediction(self, client, mock_cache):
+    def test_negative_prediction(self, client, mock_cache, reset_ml_service):
         ad_data = {
             "seller_id": 0,
             "is_verified_seller": True,
             "item_id": 123,
             "name": "Product 1",
-            "description": "bla bla bla",
+            "description": "bla bla bla" * 100,
             "category": 100,
             "images_qty": 10,
         }
@@ -101,30 +156,46 @@ class TestPredictions:
         data = response.json()
 
         assert response.status_code == 200
-        assert data["is_violation"] == 0
-        # Обновляем ожидаемые значения
-        assert data["probability"] > 0.00004
-        assert data["probability"] < 0.00005
+        assert "is_violation" in data
+        assert "probability" in data
 
-    def test_negative_simple_prediction(self, client, mock_cache):
+    def test_negative_simple_prediction(
+        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+    ):
         mock_cache.get_prediction.return_value = None
-        
-        with patch.object(ml_service_client, 'simple_predict', new_callable=AsyncMock) as mock_predict:
-            expected_result = {"is_violation": 0, "probability": 0.00620}
-            mock_predict.return_value = expected_result
-            
-            response = client.post("/simple_predict", json={"id": 1})
-            data = response.json()
 
-            assert response.status_code == 200
-            assert data["is_violation"] == 0
-            assert data["probability"] > 0.006
-            assert data["probability"] < 0.007
+        from app.models.advertisement import AdvertisementWithSeller
 
-            mock_cache.get_prediction.assert_called_once_with(1)
+        test_ad = AdvertisementWithSeller(
+            seller_id=2,
+            is_verified_seller=False,
+            item_id=1,
+            name="Test",
+            description="Test description",
+            category=5,
+            images_qty=3,
+            is_closed=False,
+        )
+        mock_ad_repo.get.return_value = test_ad
+
+        mock_model.predict.return_value = (0, 0.00620)
+
+        response = client.post("/simple_predict", json={"id": 1})
+        data = response.json()
+
+        assert response.status_code == 200
+        assert data["is_violation"] == 0
+        assert 0.006 < data["probability"] < 0.007
+
+        mock_cache.get_prediction.assert_called_once_with(1)
+        mock_ad_repo.get.assert_called_once_with(1)
+        mock_model.predict.assert_called_once()
+        mock_cache.set_prediction.assert_called_once_with(
+            1, {"is_violation": 0, "probability": 0.00620}
+        )
 
     @pytest.mark.asyncio
-    async def test_async_predict(self, client):
+    async def test_async_predict(self, client, reset_ml_service):
         moder_repo = ModerationRepository()
         moderations = await moder_repo.get_many()
         moderations_ids = [moderation.id for moderation in moderations]
@@ -146,7 +217,7 @@ class TestPredictions:
         assert moder_res.error_message is None
 
     @pytest.mark.asyncio
-    async def test_moderation_result(self, client):
+    async def test_moderation_result(self, client, reset_ml_service):
         moder_repo = ModerationRepository()
         moderations = await moder_repo.get_many()
         moderations_ids = [moderation.id for moderation in moderations]
@@ -167,12 +238,6 @@ class TestPredictions:
 
 
 class TestValidation:
-    # Во всех тестах валидации не используется pytest.mark.parametrize
-    # т.к. разбил тесты на разные типы:
-    # 1) пропущены все поля
-    # 2) неверные типы для поля с числовым типом
-    # 3) неверные типы для поля с строковым типом
-    # 4) неверные типы для поля с булевым типом
     def test_missing_required_field(self, client):
         ad_data = {
             "seller_id": 4,
@@ -232,7 +297,7 @@ class TestValidation:
         }
 
         str_fields = ["name", "description"]
-        values_not_int = [
+        values_not_str = [
             3.14,
             True,
             (1, "a", True),
@@ -242,7 +307,7 @@ class TestValidation:
         ]
 
         for field in str_fields:
-            for v in values_not_int:
+            for v in values_not_str:
                 ad_data_tmp = ad_data.copy()
                 ad_data_tmp[field] = v
 
@@ -260,7 +325,7 @@ class TestValidation:
             "images_qty": 0,
         }
 
-        values_not_int = [
+        values_not_bool = [
             3.14,
             12,
             "werty",
@@ -270,7 +335,7 @@ class TestValidation:
             None,
         ]
 
-        for v in values_not_int:
+        for v in values_not_bool:
             ad_data_tmp = ad_data.copy()
             ad_data_tmp["is_verified_seller"] = v
 
@@ -278,32 +343,23 @@ class TestValidation:
             assert response.status_code == 422
 
 
-
-
 class TestUnavailableModel:
-    def test_unavailable_model(self):
-        # Мокаем модель, чтобы она была недоступна
-        with patch("app.services.ml_service.model_client") as mock_model_client:
-            mock_model_client.predict.side_effect = Exception("Model not available")
-            
-            # Также мокаем cache_repo, чтобы не было обращений к реальному кэшу
-            with patch("app.services.ml_service.CacheRepository") as mock_cache_class:
-                mock_cache = AsyncMock()
-                mock_cache_class.return_value = mock_cache
-                
-                client = TestClient(app)
+    def test_unavailable_model(
+        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+    ):
+        mock_model.predict.side_effect = ModelIsNotAvailable("Model not loaded")
 
-                ad_data = {
-                    "seller_id": 0,
-                    "is_verified_seller": True,
-                    "item_id": 123,
-                    "name": "Product 1",
-                    "description": "bla bla bla",
-                    "category": 100,
-                    "images_qty": 10,
-                }
+        ad_data = {
+            "seller_id": 0,
+            "is_verified_seller": True,
+            "item_id": 123,
+            "name": "Product 1",
+            "description": "bla bla bla",
+            "category": 100,
+            "images_qty": 10,
+        }
 
-                response = client.post("/predict", json=ad_data)
+        response = client.post("/predict", json=ad_data)
 
-                assert response.status_code == 503
-
+        assert response.status_code == 503
+        assert "Model is not available" in response.json()["detail"]

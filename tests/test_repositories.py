@@ -1,9 +1,10 @@
 import pytest
 import pytest_asyncio
+
+from app.clients.postgres import get_pg_connection
+from app.errors import AdvertisementNotFoundError, SellerNotFoundError
 from app.repositories.advertisements import AdvertisementRepository
 from app.repositories.sellers import SellerRepository
-from app.clients.postgres import get_pg_connection
-from app.errors import SellerNotFoundError, AdvertisementNotFoundError
 
 
 @pytest_asyncio.fixture
@@ -18,7 +19,9 @@ async def advertisement_repository():
 
 async def setup_database():
     async with get_pg_connection() as conn:
-        await conn.execute("DELETE FROM advertisements WHERE id in (1001, 1002, 1003, 1004)")
+        await conn.execute(
+            "DELETE FROM advertisements WHERE id in (1001, 1002, 1003, 1004)"
+        )
         await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103, 104)")
 
         await conn.execute(
@@ -50,7 +53,6 @@ async def teardown_database():
         await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103, 104, 201)")
 
 
-
 class TestSellerRepository:
     @pytest.mark.asyncio
     async def test_get_seller(self, seller_repository: SellerRepository):
@@ -70,11 +72,10 @@ class TestSellerRepository:
 
         ids = [seller.id for seller in test_sellers]
         list_is_verified = [seller.is_verified for seller in test_sellers]
-        
+
         assert ids == [101, 102, 103, 104]
         assert list_is_verified == [True, False, True, True]
         await teardown_database()
-
 
     @pytest.mark.asyncio
     async def test_create_seller(self, seller_repository: SellerRepository):
@@ -132,7 +133,6 @@ class TestAdvertisementRepository:
         assert advertisement.is_closed == False
         await teardown_database()
 
-
     @pytest.mark.asyncio
     async def test_create_advertisement(
         self, advertisement_repository: AdvertisementRepository
@@ -172,11 +172,11 @@ class TestAdvertisementRepository:
         self, advertisement_repository: AdvertisementRepository
     ):
         await setup_database()
-        
+
         ad_before = await advertisement_repository.get(item_id=1001)
-        
+
         closed_ad = await advertisement_repository.close(1001)
-        
+
         assert closed_ad.id == 1001
         assert closed_ad.is_closed == True
 

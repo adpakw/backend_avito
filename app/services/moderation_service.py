@@ -12,9 +12,9 @@ from app.errors import (
     ModelIsNotAvailable,
     ModerationTaskNotFoundError,
 )
+from app.models.moderation import ModerationResult
 from app.repositories.advertisements import AdvertisementRepository
 from app.repositories.moderation import ModerationRepository
-from app.models.moderation import ModerationResult
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,7 +93,7 @@ class ModerationService:
             processed_at=datetime.datetime.now(),
         )
 
-    async def fail_moderation_task(self, task_id: int, error_message:str):
+    async def fail_moderation_task(self, task_id: int, error_message: str):
         await self.moder_repo.update(
             task_id,
             status="failed",

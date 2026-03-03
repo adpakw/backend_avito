@@ -9,18 +9,17 @@ from aiokafka import ConsumerRecord
 from app.clients.kafka import (
     KafkaConsumer,
     KafkaProducer,
-    get_kafka_producer,
     get_kafka_consumer,
+    get_kafka_producer,
 )
-from app.services.ml_service import MLService, get_ml_service
-from app.services.moderation_service import ModerationService, get_moder_service
-from app.repositories.advertisements import AdvertisementRepository
 from app.errors import (
     AdvertisementNotFoundError,
     ErrorInPrediction,
     ModelIsNotAvailable,
 )
 from app.repositories.model import model_client
+from app.services.ml_service import MLService, get_ml_service
+from app.services.moderation_service import ModerationService, get_moder_service
 
 logging.basicConfig(
     level=logging.INFO,

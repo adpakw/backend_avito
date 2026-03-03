@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from app.clients.postgres import get_pg_connection
-
 from app.errors import SellerNotFoundError
 from app.models.seller import Seller
 

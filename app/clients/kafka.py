@@ -5,7 +5,7 @@ import os
 import sys
 from typing import Optional
 
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from dotenv import load_dotenv
 
 logging.basicConfig(

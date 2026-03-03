@@ -1,11 +1,10 @@
+import datetime
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from app.clients.postgres import get_pg_connection
-
 from app.errors import ModerationTaskNotFoundError
 from app.models.moderation import Moderation
-import datetime
 
 
 @dataclass(frozen=True)

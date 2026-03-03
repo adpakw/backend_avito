@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from app.clients.postgres import get_pg_connection
 from app.errors import AdvertisementNotFoundError
-
 from app.models.advertisement import Advertisement, AdvertisementWithSeller
 
 
@@ -17,17 +16,25 @@ class AdvertisementPostgresStorage:
         description: str,
         category: int,
         images_qty: int,
+        is_closed: bool = False,
     ) -> Mapping[str, Any]:
         query = """
-            INSERT INTO advertisements (seller_id, id, name, description, category, images_qty)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO advertisements (seller_id, id, name, description, category, images_qty, is_closed)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
         """
 
         async with get_pg_connection() as connection:
             return dict(
                 await connection.fetchrow(
-                    query, seller_id, id, name, description, category, images_qty
+                    query,
+                    seller_id,
+                    id,
+                    name,
+                    description,
+                    category,
+                    images_qty,
+                    is_closed,
                 )
             )
 
@@ -55,7 +62,8 @@ class AdvertisementPostgresStorage:
                 a.name as name,
                 a.description as description,
                 a.category as category,
-                a.images_qty as images_qty
+                a.images_qty as images_qty,
+                a.is_closed as is_closed
             FROM advertisements as a
             JOIN sellers as s ON a.seller_id = s.id 
                 AND a.id = $1::INTEGER
@@ -79,14 +87,14 @@ class AdvertisementPostgresStorage:
                 a.name as name,
                 a.description as description,
                 a.category as category,
-                a.images_qty as images_qty
+                a.images_qty as images_qty,
+                a.is_closed as is_closed
             FROM advertisements as a
             JOIN sellers as s ON a.seller_id = s.id
         """
 
         async with get_pg_connection() as connection:
             rows = await connection.fetch(query)
-
             return [dict(row) for row in rows]
 
     async def update(self, id: int, **updates: Any) -> Mapping[str, Any]:
@@ -126,9 +134,10 @@ class AdvertisementRepository:
         description: str,
         category: int,
         images_qty: int,
+        is_closed: bool = False,
     ) -> Advertisement:
         raw_user = await self.ad_postgres_storage.create(
-            seller_id, id, name, description, category, images_qty
+            seller_id, id, name, description, category, images_qty, is_closed
         )
         return Advertisement(**raw_user)
 
@@ -142,6 +151,10 @@ class AdvertisementRepository:
 
     async def update(self, item_id: int, **changes: Mapping[str, Any]) -> Advertisement:
         raw_user = await self.ad_postgres_storage.update(item_id, **changes)
+        return Advertisement(**raw_user)
+
+    async def close(self, item_id: int) -> Advertisement:
+        raw_user = await self.ad_postgres_storage.update(item_id, is_closed=True)
         return Advertisement(**raw_user)
 
     async def get_many(self) -> Sequence[AdvertisementWithSeller]:

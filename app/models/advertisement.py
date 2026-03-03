@@ -9,6 +9,7 @@ class AdvertisementWithSeller(BaseModel):
     description: str = Field(min_length=1)
     category: int = Field(ge=0)
     images_qty: int = Field(ge=0)
+    is_closed: bool = Field(default=False)
 
 
 class Advertisement(BaseModel):
@@ -18,6 +19,8 @@ class Advertisement(BaseModel):
     description: str = Field(min_length=1)
     category: int = Field(ge=0)
     images_qty: int = Field(ge=0)
+    is_closed: bool = Field(default=False)
+
 
 class AdvertisementID(BaseModel):
     id: int = Field(ge=0)

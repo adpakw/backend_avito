@@ -11,6 +11,7 @@ from app.errors import (
 )
 from app.models.advertisement import AdvertisementWithSeller
 from app.repositories.advertisements import AdvertisementRepository
+from app.repositories.cache import CacheRepository
 from app.repositories.model import model_client
 
 logging.basicConfig(
@@ -27,6 +28,7 @@ class MLService:
 
     def __init__(self):
         self.model_client = model_client
+        self.cache_repo = CacheRepository()
 
     def __new__(cls):
         if cls._instance is None:
@@ -88,23 +90,34 @@ class MLService:
 
     async def simple_predict(self, item_id: int) -> Dict[str, Any]:
         try:
+            cached_result = await self.cache_repo.get_prediction(item_id)
+            if cached_result:
+                logger.info(f"Returning cached prediction for item_id={item_id}")
+                return cached_result
+
+            logger.info(f"Cache miss, fetching from DB for item_id={item_id}")
             ad_repo = AdvertisementRepository()
-
-            logger.info(
-                "Request to simple predict: {item_id=%s}",
-                item_id,
-            )
-
             ad_data = await ad_repo.get(item_id)
 
-            return self.predict(ad_data)
+            if ad_data.is_closed:
+                raise AdvertisementNotFoundError(f"Advertisement {item_id} is closed")
+
+            prediction = self.predict(ad_data)
+
+            await self.cache_repo.set_prediction(item_id, prediction)
+
+            return prediction
 
         except ModelIsNotAvailable as e:
             raise ModelIsNotAvailable("Model is not available in MLService.")
         except AdvertisementNotFoundError as e:
-            raise ErrorInPrediction("Advertisement Not Found In DB.")
+            raise ErrorInPrediction(str(e))
         except Exception as e:
-            raise ErrorInPrediction("Error in prediction in MLService.")
+            raise ErrorInPrediction(f"Error in prediction in MLService: {str(e)}")
+
+    async def invalidate_cache(self, item_id: int) -> None:
+        await self.cache_repo.delete_prediction(item_id)
+        logger.info(f"Invalidated cache for item_id={item_id}")
 
     def get_ml_service(self):
         return self

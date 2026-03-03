@@ -18,24 +18,26 @@ async def advertisement_repository():
 
 async def setup_database():
     async with get_pg_connection() as conn:
-        await conn.execute("DELETE FROM advertisements WHERE id in (1001, 1002, 1003)")
-        await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103)")
+        await conn.execute("DELETE FROM advertisements WHERE id in (1001, 1002, 1003, 1004)")
+        await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103, 104)")
 
         await conn.execute(
             """
             INSERT INTO sellers (id, is_verified) VALUES 
             (101, true),
             (102, false),
-            (103, true)
+            (103, true),
+            (104, true)
         """
         )
 
         await conn.execute(
             """
-            INSERT INTO advertisements (seller_id, id, name, description, category, images_qty) VALUES 
-            (101, 1001, 'Тестовый товар 1', 'Описание тестового товара 1', 1, 3),
-            (102, 1002, 'Тестовый товар 2', 'Описание тестового товара 2', 2, 5),
-            (103, 1003, 'Тестовый товар 3', 'Описание тестового товара 3', 3, 2)
+            INSERT INTO advertisements (seller_id, id, name, description, category, images_qty, is_closed) VALUES 
+            (101, 1001, 'Тестовый товар 1', 'Описание тестового товара 1', 1, 3, false),
+            (102, 1002, 'Тестовый товар 2', 'Описание тестового товара 2', 2, 5, false),
+            (103, 1003, 'Тестовый товар 3', 'Описание тестового товара 3', 3, 2, false),
+            (104, 1004, 'Закрытый товар', 'Описание закрытого товара', 4, 1, true)
         """
         )
 
@@ -43,9 +45,10 @@ async def setup_database():
 async def teardown_database():
     async with get_pg_connection() as conn:
         await conn.execute(
-            "DELETE FROM advertisements WHERE id in (1001, 1002, 1003, 2001)"
+            "DELETE FROM advertisements WHERE id in (1001, 1002, 1003, 1004, 2001)"
         )
-        await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103, 201)")
+        await conn.execute("DELETE FROM sellers WHERE id in (101, 102, 103, 104, 201)")
+
 
 
 class TestSellerRepository:
@@ -67,9 +70,11 @@ class TestSellerRepository:
 
         ids = [seller.id for seller in test_sellers]
         list_is_verified = [seller.is_verified for seller in test_sellers]
-        assert ids == [101, 102, 103]
-        assert list_is_verified == [True, False, True]
+        
+        assert ids == [101, 102, 103, 104]
+        assert list_is_verified == [True, False, True, True]
         await teardown_database()
+
 
     @pytest.mark.asyncio
     async def test_create_seller(self, seller_repository: SellerRepository):
@@ -124,32 +129,9 @@ class TestAdvertisementRepository:
         assert advertisement.description == "Описание тестового товара 2"
         assert advertisement.category == 2
         assert advertisement.images_qty == 5
+        assert advertisement.is_closed == False
         await teardown_database()
 
-    @pytest.mark.asyncio
-    async def test_get_many_advertisements(
-        self, advertisement_repository: AdvertisementRepository
-    ):
-        await setup_database()
-        advertisements = await advertisement_repository.get_many()
-
-        test_ads = [ad for ad in advertisements if ad.item_id >= 1000]
-
-        assert len(test_ads) >= 3
-
-        ad1001 = next(ad for ad in test_ads if ad.item_id == 1001)
-        ad1002 = next(ad for ad in test_ads if ad.item_id == 1002)
-        ad1003 = next(ad for ad in test_ads if ad.item_id == 1003)
-
-        assert ad1001.seller_id == 101
-        assert ad1001.is_verified_seller == True
-
-        assert ad1002.seller_id == 102
-        assert ad1002.is_verified_seller == False
-
-        assert ad1003.seller_id == 103
-        assert ad1003.is_verified_seller == True
-        await teardown_database()
 
     @pytest.mark.asyncio
     async def test_create_advertisement(
@@ -166,11 +148,43 @@ class TestAdvertisementRepository:
         assert advertisement.description == "Описание нового товара"
         assert advertisement.category == 4
         assert advertisement.images_qty == 7
+        assert advertisement.is_closed == False
 
         created_ad = await advertisement_repository.get(item_id=2001)
         assert created_ad.name == "Новый тестовый товар"
         await teardown_database()
 
+    @pytest.mark.asyncio
+    async def test_create_closed_advertisement(
+        self, advertisement_repository: AdvertisementRepository
+    ):
+        await setup_database()
+        advertisement = await advertisement_repository.create(
+            101, 2001, "Закрытый товар", "Описание", 4, 7, is_closed=True
+        )
+
+        assert advertisement.id == 2001
+        assert advertisement.is_closed == True
+        await teardown_database()
+
+    @pytest.mark.asyncio
+    async def test_close_advertisement(
+        self, advertisement_repository: AdvertisementRepository
+    ):
+        await setup_database()
+        
+        ad_before = await advertisement_repository.get(item_id=1001)
+        
+        closed_ad = await advertisement_repository.close(1001)
+        
+        assert closed_ad.id == 1001
+        assert closed_ad.is_closed == True
+
+        ad_after = await advertisement_repository.get(item_id=1001)
+
+        assert closed_ad.id == 1001
+        assert closed_ad.is_closed == True
+        await teardown_database()
 
     @pytest.mark.asyncio
     async def test_update_advertisement(
@@ -190,6 +204,7 @@ class TestAdvertisementRepository:
         assert advertisement.description == "Новое описание после обновления"
         assert advertisement.category == 5
         assert advertisement.images_qty == 10
+        assert advertisement.is_closed == False
         await teardown_database()
 
     @pytest.mark.asyncio

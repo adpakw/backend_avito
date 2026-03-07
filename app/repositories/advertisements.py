@@ -1,13 +1,15 @@
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Sequence
 
 from app.clients.postgres import get_pg_connection
 from app.errors import AdvertisementNotFoundError
 from app.models.advertisement import Advertisement, AdvertisementWithSeller
+from app.observability.metrics import track_db_query
 
 
 @dataclass(frozen=True)
 class AdvertisementPostgresStorage:
+    @track_db_query("insert")
     async def create(
         self,
         seller_id: int,
@@ -38,6 +40,7 @@ class AdvertisementPostgresStorage:
                 )
             )
 
+    @track_db_query("delete")
     async def delete(self, id: int) -> Mapping[str, Any]:
         query = """
             DELETE FROM advertisements
@@ -53,6 +56,7 @@ class AdvertisementPostgresStorage:
 
             raise AdvertisementNotFoundError()
 
+    @track_db_query("select")
     async def select(self, id: int) -> Mapping[str, Any]:
         query = """
             SELECT 
@@ -78,6 +82,7 @@ class AdvertisementPostgresStorage:
 
             raise AdvertisementNotFoundError()
 
+    @track_db_query("select_many")
     async def select_many(self) -> Sequence[Mapping[str, Any]]:
         query = """
             SELECT 
@@ -97,6 +102,7 @@ class AdvertisementPostgresStorage:
             rows = await connection.fetch(query)
             return [dict(row) for row in rows]
 
+    @track_db_query("update")
     async def update(self, id: int, **updates: Any) -> Mapping[str, Any]:
         keys, args = [], []
 

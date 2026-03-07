@@ -5,10 +5,12 @@ from typing import Any, Mapping, Sequence
 from app.clients.postgres import get_pg_connection
 from app.errors import ModerationTaskNotFoundError
 from app.models.moderation import Moderation
+from app.observability.metrics import track_db_query
 
 
 @dataclass(frozen=True)
 class ModerationPostgresStorage:
+    @track_db_query("insert")
     async def create(
         self, item_id: int, status: str, created_at: str
     ) -> Mapping[str, Any]:
@@ -21,6 +23,7 @@ class ModerationPostgresStorage:
         async with get_pg_connection() as connection:
             return dict(await connection.fetchrow(query, item_id, status, created_at))
 
+    @track_db_query("delete")
     async def delete(self, id: int) -> Mapping[str, Any]:
         query = """
             DELETE FROM moderation_results
@@ -36,6 +39,7 @@ class ModerationPostgresStorage:
 
             raise ModerationTaskNotFoundError()
 
+    @track_db_query("select")
     async def select(self, id: int) -> Mapping[str, Any]:
         query = """
             SELECT *
@@ -52,6 +56,7 @@ class ModerationPostgresStorage:
 
             raise ModerationTaskNotFoundError()
 
+    @track_db_query("select_many")
     async def select_many(self) -> Sequence[Mapping[str, Any]]:
         query = """
             SELECT *
@@ -63,6 +68,7 @@ class ModerationPostgresStorage:
 
             return [dict(row) for row in rows]
 
+    @track_db_query("update")
     async def update(self, id: int, **updates: Any) -> Mapping[str, Any]:
         keys, args = [], []
 

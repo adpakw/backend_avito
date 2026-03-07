@@ -2,9 +2,12 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
 
 from app.clients.kafka import kafka_producer
 from app.clients.redis import redis_client
+from app.observability.middleware import PrometheusMiddleware
 from app.repositories.model import get_model, model_client
 from app.routes import close, moderation_result, predict
 
@@ -21,6 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 router = APIRouter()
+app.add_middleware(PrometheusMiddleware)
 
 
 @app.get("/", status_code=status.HTTP_200_OK)
@@ -31,6 +35,11 @@ async def root():
 @router.get("/health")
 def health(model=Depends(get_model)):
     return {"status": "healthy", "model_loaded": model is not None}
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 app.include_router(router)

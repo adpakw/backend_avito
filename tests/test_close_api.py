@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +28,7 @@ def sample_ad():
 
 
 class TestCloseAPI:
-    def test_close_advertisement_success(self, client, sample_ad):
+    def test_close_advertisement_success(self, client, sample_ad, auth_override):
         with patch.object(
             close_service_client, "close_advertisement", new_callable=AsyncMock
         ) as mock_close:
@@ -46,7 +46,7 @@ class TestCloseAPI:
 
             mock_close.assert_called_once_with(123)
 
-    def test_close_advertisement_not_found(self, client):
+    def test_close_advertisement_not_found(self, client, auth_override):
         with patch.object(
             close_service_client, "close_advertisement", new_callable=AsyncMock
         ) as mock_close:
@@ -62,16 +62,14 @@ class TestCloseAPI:
 
             mock_close.assert_called_once_with(99999)
 
-    def test_close_advertisement_invalid_input(self, client):
+    def test_close_advertisement_invalid_input(self, client, auth_override):
         request_data = {"id": -1}
 
         response = client.post("/close", json=request_data)
 
         assert response.status_code == 422
 
-    def test_close_advertisement_missing_field(self, client):
+    def test_close_advertisement_missing_field(self, client, auth_override):
         request_data = {}
-
         response = client.post("/close", json=request_data)
-
         assert response.status_code == 422

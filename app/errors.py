@@ -21,7 +21,26 @@ class AdvertisementNotFoundError(Exception):
 
     pass
 
+
 class ModerationTaskNotFoundError(Exception):
     """Ошибка указывает на то, что задача на обработку в бд не найдена"""
+
+    pass
+
+
+class AccountNotFoundError(Exception):
+    """Ошибка указывает на то, что аккаунт не найден"""
+
+    pass
+
+
+class AccountBlockedError(Exception):
+    """Ошибка указывает на то, что аккаунт заблокирован"""
+
+    pass
+
+
+class InvalidCredentialsError(Exception):
+    """Ошибка указывает на неверные учетные данные"""
 
     pass

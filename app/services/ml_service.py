@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from typing import Any, Dict
 
 import numpy as np
@@ -10,6 +11,12 @@ from app.errors import (
     ModelIsNotAvailable,
 )
 from app.models.advertisement import AdvertisementWithSeller
+from app.observability.metrics import (
+    MODEL_PREDICTION_PROBABILITY,
+    PREDICTION_DURATION_SECONDS,
+    PREDICTION_ERRORS_TOTAL,
+    PREDICTIONS_TOTAL,
+)
 from app.repositories.advertisements import AdvertisementRepository
 from app.repositories.cache import CacheRepository
 from app.repositories.model import model_client
@@ -56,26 +63,28 @@ class MLService:
         )
 
     def predict(self, ad_data: AdvertisementWithSeller) -> Dict[str, Any]:
-        try:
-            logger.info(
-                "Request to predict: {seller_id=%s, item_id=%s, "
-                "is_verified_seller=%s, images_qty=%s, description=%s, category=%s}",
-                ad_data.seller_id,
-                ad_data.item_id,
-                ad_data.is_verified_seller,
-                ad_data.images_qty,
-                ad_data.description,
-                ad_data.category,
-            )
+        logger.info(
+            "Request to predict: seller_id=%s, item_id=%s",
+            ad_data.seller_id,
+            ad_data.item_id,
+        )
 
+        try:
             features = self._prepare_features(ad_data)
 
+            start_time = time.time()
             is_violation, probability = self.model_client.predict(features)
+            inference_duration = time.time() - start_time
+
+            result_label = "violation" if is_violation else "no_violation"
+            PREDICTIONS_TOTAL.labels(result=result_label).inc()
+            PREDICTION_DURATION_SECONDS.labels(prediction_type="sync").observe(
+                inference_duration
+            )
+            MODEL_PREDICTION_PROBABILITY.observe(probability)
 
             logger.info(
-                "Result of prediction: {seller_id=%s, item_id=%s} - "
-                "is_violation=%s, probability=%.4f",
-                ad_data.seller_id,
+                "Prediction result: item_id=%s - is_violation=%s, probability=%.4f",
                 ad_data.item_id,
                 is_violation,
                 probability,
@@ -84,8 +93,10 @@ class MLService:
             return {"is_violation": is_violation, "probability": probability}
 
         except ModelIsNotAvailable as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="model_unavailable").inc()
             raise ModelIsNotAvailable("Model is not available in MLService.")
         except Exception as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
             raise ErrorInPrediction("Error in prediction in MLService.")
 
     async def simple_predict(self, item_id: int) -> Dict[str, Any]:
@@ -96,10 +107,12 @@ class MLService:
                 return cached_result
 
             logger.info(f"Cache miss, fetching from DB for item_id={item_id}")
+
             ad_repo = AdvertisementRepository()
             ad_data = await ad_repo.get(item_id)
 
             if ad_data.is_closed:
+                PREDICTION_ERRORS_TOTAL.labels(error_type="ad_not_found").inc()
                 raise AdvertisementNotFoundError(f"Advertisement {item_id} is closed")
 
             prediction = self.predict(ad_data)
@@ -109,10 +122,13 @@ class MLService:
             return prediction
 
         except ModelIsNotAvailable as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="model_unavailable").inc()
             raise ModelIsNotAvailable("Model is not available in MLService.")
         except AdvertisementNotFoundError as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="ad_not_found").inc()
             raise ErrorInPrediction(str(e))
         except Exception as e:
+            PREDICTION_ERRORS_TOTAL.labels(error_type="prediction_error").inc()
             raise ErrorInPrediction(f"Error in prediction in MLService: {str(e)}")
 
     async def invalidate_cache(self, item_id: int) -> None:

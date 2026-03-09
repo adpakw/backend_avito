@@ -3,7 +3,9 @@ import sys
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.dependencies.auth import get_current_active_account
 from app.errors import ErrorInPrediction, ModerationTaskNotFoundError
+from app.models.account import Account
 from app.models.moderation import ModerationResult
 from app.services.moderation_service import ModerationService, get_moder_service
 
@@ -14,14 +16,18 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("app")
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_active_account)])
 
 
 @router.get("/moderation_result/{task_id}", response_model=ModerationResult)
 async def moderation_result_endpoint(
     task_id: int,
     moder_service_client: ModerationService = Depends(get_moder_service),
+    current_account: Account = Depends(get_current_active_account),
 ):
+    logger.info(
+        f"User {current_account.login} requested moderation result for task {task_id}"
+    )
     try:
         moderation_result = await moder_service_client.get_moderation_result(task_id)
     except ErrorInPrediction:

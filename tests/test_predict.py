@@ -67,7 +67,9 @@ def reset_ml_service():
 
 
 class TestPredictions:
-    def test_positive_prediction(self, client, mock_cache, reset_ml_service):
+    def test_positive_prediction(
+        self, client, mock_cache, reset_ml_service, auth_override
+    ):
         ad_data = {
             "seller_id": 0,
             "is_verified_seller": False,
@@ -89,7 +91,13 @@ class TestPredictions:
         mock_cache.set_prediction.assert_not_called()
 
     def test_positive_simple_prediction(
-        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+        self,
+        client,
+        mock_cache,
+        mock_ad_repo,
+        mock_model,
+        reset_ml_service,
+        auth_override,
     ):
         mock_cache.get_prediction.return_value = None
 
@@ -125,7 +133,13 @@ class TestPredictions:
         )
 
     def test_simple_prediction_cache_hit(
-        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+        self,
+        client,
+        mock_cache,
+        mock_ad_repo,
+        mock_model,
+        reset_ml_service,
+        auth_override,
     ):
         cached_result = {"is_violation": 1, "probability": 0.75}
         mock_cache.get_prediction.return_value = cached_result
@@ -141,7 +155,9 @@ class TestPredictions:
         mock_model.predict.assert_not_called()
         mock_cache.set_prediction.assert_not_called()
 
-    def test_negative_prediction(self, client, mock_cache, reset_ml_service):
+    def test_negative_prediction(
+        self, client, mock_cache, reset_ml_service, auth_override
+    ):
         ad_data = {
             "seller_id": 0,
             "is_verified_seller": True,
@@ -160,7 +176,13 @@ class TestPredictions:
         assert "probability" in data
 
     def test_negative_simple_prediction(
-        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+        self,
+        client,
+        mock_cache,
+        mock_ad_repo,
+        mock_model,
+        reset_ml_service,
+        auth_override,
     ):
         mock_cache.get_prediction.return_value = None
 
@@ -195,7 +217,7 @@ class TestPredictions:
         )
 
     @pytest.mark.asyncio
-    async def test_async_predict(self, client, reset_ml_service):
+    async def test_async_predict(self, client, reset_ml_service, auth_override):
         moder_repo = ModerationRepository()
         moderations = await moder_repo.get_many()
         moderations_ids = [moderation.id for moderation in moderations]
@@ -217,7 +239,7 @@ class TestPredictions:
         assert moder_res.error_message is None
 
     @pytest.mark.asyncio
-    async def test_moderation_result(self, client, reset_ml_service):
+    async def test_moderation_result(self, client, reset_ml_service, auth_override):
         moder_repo = ModerationRepository()
         moderations = await moder_repo.get_many()
         moderations_ids = [moderation.id for moderation in moderations]
@@ -238,7 +260,7 @@ class TestPredictions:
 
 
 class TestValidation:
-    def test_missing_required_field(self, client):
+    def test_missing_required_field(self, client, auth_override):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -256,7 +278,7 @@ class TestValidation:
             response = client.post("/predict", json=ad_data_tmp)
             assert response.status_code == 422
 
-    def test_wrong_type_for_int_fields(self, client):
+    def test_wrong_type_for_int_fields(self, client, auth_override):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -285,7 +307,7 @@ class TestValidation:
                 response = client.post("/predict", json=ad_data_tmp)
                 assert response.status_code == 422
 
-    def test_wrong_type_for_str_fields(self, client):
+    def test_wrong_type_for_str_fields(self, client, auth_override):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -314,7 +336,7 @@ class TestValidation:
                 response = client.post("/predict", json=ad_data_tmp)
                 assert response.status_code == 422
 
-    def test_wrong_type_for_bool_fields(self, client):
+    def test_wrong_type_for_bool_fields(self, client, auth_override):
         ad_data = {
             "seller_id": 4,
             "is_verified_seller": False,
@@ -345,7 +367,13 @@ class TestValidation:
 
 class TestUnavailableModel:
     def test_unavailable_model(
-        self, client, mock_cache, mock_ad_repo, mock_model, reset_ml_service
+        self,
+        client,
+        mock_cache,
+        mock_ad_repo,
+        mock_model,
+        reset_ml_service,
+        auth_override,
     ):
         mock_model.predict.side_effect = ModelIsNotAvailable("Model not loaded")
 

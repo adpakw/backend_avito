@@ -9,7 +9,7 @@ from app.clients.kafka import kafka_producer
 from app.clients.redis import redis_client
 from app.observability.middleware import PrometheusMiddleware
 from app.repositories.model import get_model, model_client
-from app.routes import close, moderation_result, predict
+from app.routes import auth, close, moderation_result, predict
 
 
 @asynccontextmanager
@@ -46,6 +46,7 @@ app.include_router(router)
 app.include_router(predict.router)
 app.include_router(moderation_result.router)
 app.include_router(close.router)
+app.include_router(auth.router, prefix="/auth", tags=["authentication"])
 
 
 if __name__ == "__main__":

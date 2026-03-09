@@ -3,7 +3,9 @@ import sys
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.errors import AdvertisementNotFoundError, ModerationTaskNotFoundError
+from app.dependencies.auth import get_current_active_account
+from app.errors import AdvertisementNotFoundError
+from app.models.account import Account
 from app.models.advertisement import Advertisement, AdvertisementID
 from app.services.close_service import CloseService, get_close_service
 
@@ -14,14 +16,18 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("app")
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_active_account)])
 
 
 @router.post("/close", response_model=Advertisement)
 async def close_advertisement_endpoint(
     request: AdvertisementID,
     close_service: CloseService = Depends(get_close_service),
+    current_account: Account = Depends(get_current_active_account),
 ):
+    logger.info(
+        f"User {current_account.login} requested to close advertisement {request.id}"
+    )
     try:
         closed_ad = await close_service.close_advertisement(request.id)
         return closed_ad

@@ -3,7 +3,9 @@ import sys
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.dependencies.auth import get_current_active_account
 from app.errors import ErrorInPrediction, ModelIsNotAvailable
+from app.models.account import Account
 from app.models.advertisement import AdvertisementID, AdvertisementWithSeller
 from app.models.moderation import ModerationMessage
 from app.models.response_predict import PredictResponse
@@ -18,13 +20,16 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("app")
-router = APIRouter(dependencies=[Depends(get_model), Depends(get_ml_service)])
+router = APIRouter(dependencies=[Depends(get_current_active_account)])
 
 
 @router.post("/predict", response_model=PredictResponse)
 async def predict_endpoint(
-    ad: AdvertisementWithSeller, ml_service_client: MLService = Depends(get_ml_service)
+    ad: AdvertisementWithSeller, 
+    ml_service_client: MLService = Depends(get_ml_service),
+    current_account: Account = Depends(get_current_active_account),
 ):
+    logger.info(f"User {current_account.login} (id: {current_account.id}) requested prediction")
     try:
         prediction = ml_service_client.predict(ad)
     except ModelIsNotAvailable:
@@ -43,8 +48,11 @@ async def predict_endpoint(
 
 @router.post("/simple_predict", response_model=PredictResponse)
 async def simple_predict_endpoint(
-    ad: AdvertisementID, ml_service_client: MLService = Depends(get_ml_service)
+    ad: AdvertisementID, 
+    ml_service_client: MLService = Depends(get_ml_service),
+    current_account: Account = Depends(get_current_active_account),
 ):
+    logger.info(f"User {current_account.login} requested simple prediction for item {ad.id}")
     try:
         prediction = await ml_service_client.simple_predict(ad.id)
     except ModelIsNotAvailable:
@@ -65,7 +73,9 @@ async def simple_predict_endpoint(
 async def async_predict_endpoint(
     ad: AdvertisementID,
     moder_service_client: ModerationService = Depends(get_moder_service),
+    current_account: Account = Depends(get_current_active_account),
 ):
+    logger.info(f"User {current_account.login} requested async prediction for item {ad.id}")
     try:
         task_id = await moder_service_client.async_predict(ad.id)
     except ModelIsNotAvailable:

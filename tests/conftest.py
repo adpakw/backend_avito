@@ -1,6 +1,11 @@
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+
+from app.dependencies.auth import get_current_active_account
+from app.main import app
+from app.models.account import Account
 
 
 def pytest_configure(config):
@@ -27,3 +32,21 @@ def mock_redis_for_unit_tests(request):
             yield
     else:
         yield
+
+
+@pytest.fixture
+def test_account():
+    return Account(
+        id=1,
+        login="testuser",
+        password="hashed",
+        is_blocked=False,
+        created_at=datetime.now(),
+    )
+
+
+@pytest.fixture
+def auth_override(test_account):
+    app.dependency_overrides[get_current_active_account] = lambda: test_account
+    yield
+    app.dependency_overrides.pop(get_current_active_account, None)
